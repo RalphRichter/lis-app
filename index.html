@@ -16,7 +16,7 @@
       <div>
         <p class="eyebrow">Lisbon · 8–13 September 2026</p>
         <h1>Lisbon with Friends</h1>
-        <p class="sub">A shared shortlist for Ralph, Stani & friends — vote, add ideas, decide together.</p>
+        <p class="sub">A shared trip plan for Ralph, Stani & friends.</p>
       </div>
       <div class="hero-actions">
         <button id="profileBtn" class="ghost-btn">👤 <span id="profileName">Choose name</span></button>
@@ -24,32 +24,43 @@
       </div>
     </header>
 
+    <nav class="main-tabs" aria-label="Trip sections">
+      <button class="main-tab active" data-tab="overview">Overview</button>
+      <button class="main-tab" data-tab="suggestions">Suggestions</button>
+      <button class="main-tab" data-tab="admin">Admin</button>
+    </nav>
+
     <main>
-      <section class="today-strip" id="todayStrip">
-        <div>
-          <span class="label">Base</span>
-          <strong>Hyatt Regency Lisbon · Belém</strong>
-        </div>
-        <div>
-          <span class="label">Ralph</span>
-          <strong>HotelOffice · 08:00–17:00 Lisbon</strong>
-        </div>
-        <div>
-          <span class="label">Stani</span>
-          <strong>ESRA Congress</strong>
-        </div>
+      <section id="overviewPanel" class="tab-panel active">
+        <section class="today-strip">
+          <div><span class="label">Base</span><strong>Hyatt Regency Lisbon · Belém</strong></div>
+          <div><span class="label">Ralph</span><strong>HotelOffice · 08:00–17:00 Lisbon</strong></div>
+          <div><span class="label">Stani</span><strong>ESRA Congress</strong></div>
+        </section>
+        <section id="overviewDays" class="days"></section>
       </section>
 
-      <section class="toolbar">
-        <div class="segmented" id="filterBar">
-          <button class="segment active" data-filter="all">All</button>
-          <button class="segment" data-filter="fixed">Fixed</button>
-          <button class="segment" data-filter="idea">Ideas</button>
-          <button class="segment" data-filter="liked">Most liked</button>
+      <section id="suggestionsPanel" class="tab-panel">
+        <div class="toolbar">
+          <div class="segmented" id="suggestionFilterBar">
+            <button class="segment active" data-sfilter="all">All suggestions</button>
+            <button class="segment" data-sfilter="liked">Most liked</button>
+          </div>
         </div>
+        <section id="suggestionDays" class="days"></section>
       </section>
 
-      <section id="days" class="days"></section>
+      <section id="adminPanel" class="tab-panel">
+        <div class="admin-head">
+          <div>
+            <p class="eyebrow dark">Admin</p>
+            <h2>Manage trip entries</h2>
+            <p class="muted">Edit or remove existing entries. Seed-entry changes are stored on this device until a shared backend is configured.</p>
+          </div>
+          <button id="adminAddBtn" class="primary-btn">＋ New entry</button>
+        </div>
+        <div id="adminList" class="admin-list"></div>
+      </section>
     </main>
   </div>
 
@@ -59,10 +70,7 @@
       <p class="eyebrow">Your profile</p>
       <h2>Who are you?</h2>
       <p class="muted">Your name is stored on this device and is shown next to ideas you add.</p>
-      <label>
-        Name
-        <input id="nameInput" maxlength="40" placeholder="e.g. Ralph" required />
-      </label>
+      <label>Name<input id="nameInput" maxlength="40" placeholder="e.g. Ralph" required /></label>
       <button class="primary-btn full" value="default">Save</button>
     </form>
   </dialog>
@@ -75,26 +83,42 @@
       <div class="form-grid">
         <label>Title<input id="ideaTitle" required placeholder="Sunset sailing" /></label>
         <label>Day<select id="ideaDay" required></select></label>
-        <label>Category<select id="ideaCategory">
-          <option>Food & Drink</option><option>Culture</option><option>Outdoors</option><option>Music</option><option>Day Trip</option><option>Other</option>
-        </select></label>
+        <label>Category<select id="ideaCategory"><option>Food & Drink</option><option>Culture</option><option>Outdoors</option><option>Music</option><option>Day Trip</option><option>Other</option></select></label>
         <label>Time<input id="ideaTime" placeholder="18:30" /></label>
         <label class="wide">Location<input id="ideaLocation" placeholder="Belém / Alfama / Cascais…" /></label>
         <label class="wide">Description<textarea id="ideaDescription" rows="3" placeholder="What makes this worth doing?"></textarea></label>
         <label>Price<input id="ideaPrice" placeholder="€€ / max €150 pp" /></label>
-        <label>Link<input id="ideaUrl" type="url" placeholder="https://…" /></label>
+        <label>URL<input id="ideaUrl" type="url" placeholder="https://…" /></label>
       </div>
       <button class="primary-btn full" value="default">Add to shortlist</button>
+    </form>
+  </dialog>
+
+  <dialog id="editDialog" class="dialog large">
+    <form method="dialog" id="editForm">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <p class="eyebrow">Admin</p>
+      <h2>Edit entry</h2>
+      <input type="hidden" id="editId" />
+      <div class="form-grid">
+        <label>Title<input id="editTitle" required /></label>
+        <label>Day<select id="editDay" required></select></label>
+        <label>Type<select id="editType"><option value="fixed">Overview</option><option value="idea">Suggestion</option></select></label>
+        <label>Category<input id="editCategory" /></label>
+        <label>Time<input id="editTime" /></label>
+        <label>Price<input id="editPrice" /></label>
+        <label class="wide">Location<input id="editLocation" /></label>
+        <label class="wide">Description<textarea id="editDescription" rows="3"></textarea></label>
+        <label class="wide">URL<input id="editUrl" type="url" placeholder="https://…" /></label>
+      </div>
+      <button class="primary-btn full" value="default">Save changes</button>
     </form>
   </dialog>
 
   <template id="dayTemplate">
     <article class="day-card">
       <div class="day-header">
-        <div>
-          <p class="day-date"></p>
-          <h2 class="day-title"></h2>
-        </div>
+        <div><p class="day-date"></p><h2 class="day-title"></h2></div>
         <span class="count-pill"></span>
       </div>
       <div class="items"></div>
@@ -104,10 +128,7 @@
   <template id="itemTemplate">
     <div class="item-card">
       <div class="item-main">
-        <div class="item-topline">
-          <span class="category-chip"></span>
-          <span class="time-chip"></span>
-        </div>
+        <div class="item-topline"><span class="category-chip"></span><span class="time-chip"></span></div>
         <h3 class="item-title"></h3>
         <p class="item-description"></p>
         <div class="meta-row"></div>

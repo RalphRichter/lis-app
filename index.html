@@ -89,6 +89,7 @@
         <label class="wide">Description<textarea id="ideaDescription" rows="3" placeholder="What makes this worth doing?"></textarea></label>
         <label>Price<input id="ideaPrice" placeholder="€€ / max €150 pp" /></label>
         <label>URL<input id="ideaUrl" type="url" placeholder="https://…" /></label>
+        <label class="wide">Image URL<input id="ideaImage" type="url" placeholder="https://… (optional; a Lisbon-style image is shown if empty)" /></label>
       </div>
       <button class="primary-btn full" value="default">Add to shortlist</button>
     </form>
@@ -110,6 +111,7 @@
         <label class="wide">Location<input id="editLocation" /></label>
         <label class="wide">Description<textarea id="editDescription" rows="3"></textarea></label>
         <label class="wide">URL<input id="editUrl" type="url" placeholder="https://…" /></label>
+        <label class="wide">Image URL<input id="editImage" type="url" placeholder="https://…" /></label>
       </div>
       <button class="primary-btn full" value="default">Save changes</button>
     </form>
@@ -127,6 +129,7 @@
 
   <template id="itemTemplate">
     <div class="item-card">
+      <div class="item-image-wrap"><img class="item-image" alt="" loading="lazy" /></div>
       <div class="item-main">
         <div class="item-topline"><span class="category-chip"></span><span class="time-chip"></span></div>
         <h3 class="item-title"></h3>
@@ -143,5 +146,6 @@
   <script src="config.js"></script>
   <script src="app.js"></script>
   <script src="calendar.js"></script>
+  <script src="images.js"></script>
 </body>
 </html>

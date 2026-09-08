@@ -70,14 +70,12 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-
     const img = await new Promise((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
       el.onerror = reject;
       el.src = raw;
     });
-
     const max = 1600;
     const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -132,9 +130,7 @@
         }
         alert('No image was found in the clipboard.');
         return;
-      } catch (_) {
-        // iOS/Safari can reject programmatic clipboard reads. Fall back to native Paste.
-      }
+      } catch (_) {}
     }
     pasteZone.focus();
     pasteZone.textContent = 'Tap and hold here, then choose Paste';
@@ -145,96 +141,42 @@
     field.dataset.pickerReady = '1';
     field.type = 'text';
     field.placeholder = 'https://…';
-
     const label = field.closest('label');
     if (!label) return;
     const textNode = [...label.childNodes].find(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
     if (textNode) textNode.textContent = 'Image ';
-
     const picker = document.createElement('div');
     picker.className = 'image-picker';
     const actions = document.createElement('div');
     actions.className = 'image-picker-actions';
-
     const chooseBtn = document.createElement('button');
-    chooseBtn.type = 'button';
-    chooseBtn.className = 'small-btn';
-    chooseBtn.textContent = '🖼️ Photo / File';
-
+    chooseBtn.type = 'button'; chooseBtn.className = 'small-btn'; chooseBtn.textContent = '🖼️ Photo / File';
     const pasteBtn = document.createElement('button');
-    pasteBtn.type = 'button';
-    pasteBtn.className = 'small-btn';
-    pasteBtn.textContent = '📋 Paste';
-
+    pasteBtn.type = 'button'; pasteBtn.className = 'small-btn'; pasteBtn.textContent = '📋 Paste';
     const clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.className = 'small-btn';
-    clearBtn.textContent = '✕ Clear';
-
+    clearBtn.type = 'button'; clearBtn.className = 'small-btn'; clearBtn.textContent = '✕ Clear';
     const file = document.createElement('input');
-    file.type = 'file';
-    file.accept = 'image/*';
-    file.className = 'image-file-input';
-
+    file.type = 'file'; file.accept = 'image/*'; file.className = 'image-file-input';
     const pasteZone = document.createElement('div');
-    pasteZone.className = 'image-paste-zone';
-    pasteZone.contentEditable = 'true';
-    pasteZone.setAttribute('role', 'textbox');
-    pasteZone.setAttribute('aria-label', 'Paste image here');
-    pasteZone.textContent = 'Or paste an image here';
-
+    pasteZone.className = 'image-paste-zone'; pasteZone.contentEditable = 'true'; pasteZone.setAttribute('role', 'textbox'); pasteZone.setAttribute('aria-label', 'Paste image here'); pasteZone.textContent = 'Or paste an image here';
     const preview = document.createElement('img');
-    preview.className = 'image-picker-preview';
-    preview.alt = 'Selected image preview';
-    preview.hidden = true;
-
-    const status = document.createElement('div');
-    status.className = 'image-picker-status';
-
+    preview.className = 'image-picker-preview'; preview.alt = 'Selected image preview'; preview.hidden = true;
+    const status = document.createElement('div'); status.className = 'image-picker-status';
     actions.append(chooseBtn, pasteBtn, clearBtn);
     picker.append(actions, file, pasteZone, preview, status);
-    field.before(picker);
-    picker.append(field);
-
+    field.before(picker); picker.append(field);
     chooseBtn.addEventListener('click', () => file.click());
-    file.addEventListener('change', () => {
-      const selected = file.files?.[0];
-      if (selected) acceptImageFile(field, selected);
-      file.value = '';
-    });
+    file.addEventListener('change', () => { const selected = file.files?.[0]; if (selected) acceptImageFile(field, selected); file.value = ''; });
     pasteBtn.addEventListener('click', () => pasteFromClipboard(field, pasteZone));
-    pasteZone.addEventListener('paste', e => {
-      const imgItem = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
-      if (!imgItem) return;
-      e.preventDefault();
-      const blob = imgItem.getAsFile();
-      if (blob) acceptImageFile(field, blob);
-    });
-    pasteZone.addEventListener('input', () => {
-      if (pasteZone.textContent && !pasteZone.querySelector('img')) pasteZone.textContent = 'Or paste an image here';
-    });
-    field.addEventListener('input', () => {
-      if (field.value.trim()) delete field.dataset.localImage;
-      updatePickerPreview(field);
-    });
-    clearBtn.addEventListener('click', () => {
-      field.value = '';
-      delete field.dataset.localImage;
-      updatePickerPreview(field);
-    });
+    pasteZone.addEventListener('paste', e => { const imgItem = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/')); if (!imgItem) return; e.preventDefault(); const blob = imgItem.getAsFile(); if (blob) acceptImageFile(field, blob); });
+    pasteZone.addEventListener('input', () => { if (pasteZone.textContent && !pasteZone.querySelector('img')) pasteZone.textContent = 'Or paste an image here'; });
+    field.addEventListener('input', () => { if (field.value.trim()) delete field.dataset.localImage; updatePickerPreview(field); });
+    clearBtn.addEventListener('click', () => { field.value = ''; delete field.dataset.localImage; updatePickerPreview(field); });
     updatePickerPreview(field);
   }
 
   const style = document.createElement('style');
-  style.textContent = `
-    .image-picker{display:grid;gap:9px;margin-top:2px}
-    .image-picker-actions{display:flex;gap:7px;flex-wrap:wrap}
-    .image-file-input{display:none}
-    .image-paste-zone{min-height:48px;border:1px dashed var(--line);border-radius:13px;padding:12px;background:#fff;color:var(--muted);font-weight:500;outline:none;display:flex;align-items:center}
-    .image-paste-zone:focus{border-color:#9eb6b0;box-shadow:0 0 0 3px rgba(49,94,86,.09)}
-    .image-picker-preview{width:100%;max-height:240px;object-fit:cover;border-radius:14px;border:1px solid var(--line)}
-    .image-picker-status{font-size:.72rem;color:var(--muted);font-weight:500}
-  `;
+  style.textContent = `.image-picker{display:grid;gap:9px;margin-top:2px}.image-picker-actions{display:flex;gap:7px;flex-wrap:wrap}.image-file-input{display:none}.image-paste-zone{min-height:48px;border:1px dashed var(--line);border-radius:13px;padding:12px;background:#fff;color:var(--muted);font-weight:500;outline:none;display:flex;align-items:center}.image-paste-zone:focus{border-color:#9eb6b0;box-shadow:0 0 0 3px rgba(49,94,86,.09)}.image-picker-preview{width:100%;max-height:240px;object-fit:cover;border-radius:14px;border:1px solid var(--line)}.image-picker-status{font-size:.72rem;color:var(--muted);font-weight:500}`;
   document.head.appendChild(style);
 
   setupImagePicker(document.getElementById('ideaImage'));
@@ -250,8 +192,7 @@
   openEdit = function(item) {
     baseOpenEdit(item);
     const map = imageMap();
-    const field = document.getElementById('editImage');
-    setImageValue(field, map[item.id] || item.image || '');
+    setImageValue(document.getElementById('editImage'), map[item.id] || item.image || '');
   };
 
   document.getElementById('ideaForm')?.addEventListener('submit', () => {
@@ -280,4 +221,8 @@
     saveMap(map);
     setTimeout(renderAll, 0);
   }, true);
+
+  // app.js may complete its initial render before this file has wrapped renderDayCards.
+  // Render once more so images are also applied after reload and after type changes.
+  queueMicrotask(() => renderAll());
 })();

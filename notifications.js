@@ -5,7 +5,7 @@
   const POLL_MS = 15000;
   let pollTimer = null;
   let initialized = false;
-  let seenIdeaIds = new Set();
+  let seenEntryIds = new Set();
   let seenVoteIds = new Set();
   let swReg = null;
 
@@ -22,7 +22,10 @@
   }
 
   async function rest(path) {
-    const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${path}`, { headers: headers() });
+    const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${path}`, {
+      headers: headers(),
+      cache: 'no-store'
+    });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
@@ -36,6 +39,7 @@
     }
     if (Notification.permission === 'denied') {
       btn.textContent = '🔕 Notifications blocked';
+      btn.disabled = false;
       return;
     }
     const enabled = localStorage.getItem('lis-notifications-enabled') === '1' && Notification.permission === 'granted';
@@ -45,7 +49,7 @@
   async function registerWorker() {
     if (!('serviceWorker' in navigator)) return null;
     try {
-      swReg = await navigator.serviceWorker.register('./sw.js');
+      swReg = await navigator.serviceWorker.register('./sw.js?v=2');
       return swReg;
     } catch (err) {
       console.warn('Service worker registration failed', err);
@@ -53,49 +57,51 @@
     }
   }
 
-  async function showNotification(title, body) {
+  async function showNotification(title, body, hash = '#overview') {
     if (Notification.permission !== 'granted') return;
     const options = {
       body,
       tag: `lis-${Date.now()}-${Math.random()}`,
       renotify: false,
-      data: { url: './#suggestions' }
+      data: { url: `./${hash}` }
     };
     try {
       const reg = swReg || await navigator.serviceWorker?.ready;
-      if (reg?.showNotification) {
-        await reg.showNotification(title, options);
-      } else {
-        new Notification(title, options);
-      }
+      if (reg?.showNotification) await reg.showNotification(title, options);
+      else new Notification(title, options);
     } catch (err) {
       console.warn('Notification failed', err);
     }
   }
 
+  function voteEntryId(vote) {
+    return vote.entry_id || vote.idea_id || '';
+  }
+
   async function pollChanges() {
     if (!HAS_SUPABASE || Notification.permission !== 'granted') return;
     try {
-      const [ideas, votes] = await Promise.all([
-        rest('ideas?select=id,title,created_by,created_at&order=created_at.desc&limit=40'),
-        rest('votes?select=id,idea_id,user_name,created_at&order=created_at.desc&limit=80')
+      const [entries, votes] = await Promise.all([
+        rest('ideas?select=id,title,type,created_by,created_at,updated_at&order=created_at.desc&limit=80'),
+        rest('votes?select=*&order=created_at.desc&limit=120')
       ]);
 
       if (!initialized) {
-        seenIdeaIds = new Set((ideas || []).map(x => String(x.id)));
+        seenEntryIds = new Set((entries || []).map(x => String(x.id)));
         seenVoteIds = new Set((votes || []).map(x => String(x.id)));
         initialized = true;
         return;
       }
 
       const me = currentName();
-      for (const idea of [...(ideas || [])].reverse()) {
-        const id = String(idea.id);
-        if (seenIdeaIds.has(id)) continue;
-        seenIdeaIds.add(id);
-        if ((idea.created_by || '').trim() === me) continue;
-        const who = idea.created_by ? `${idea.created_by} added a new suggestion` : 'New suggestion added';
-        await showNotification('Lisbon with Friends', `${who}: ${idea.title}`);
+      for (const entry of [...(entries || [])].reverse()) {
+        const id = String(entry.id);
+        if (seenEntryIds.has(id)) continue;
+        seenEntryIds.add(id);
+        if ((entry.created_by || '').trim() === me) continue;
+        const who = entry.created_by ? `${entry.created_by} added an entry` : 'A new entry was added';
+        const hash = entry.type === 'idea' ? '#suggestions' : '#overview';
+        await showNotification('Lisbon with Friends', `${who}: ${entry.title}`, hash);
       }
 
       for (const vote of [...(votes || [])].reverse()) {
@@ -103,9 +109,10 @@
         if (seenVoteIds.has(id)) continue;
         seenVoteIds.add(id);
         if ((vote.user_name || '').trim() === me) continue;
-        const matchingIdea = (ideas || []).find(i => String(i.id) === String(vote.idea_id));
-        const label = matchingIdea?.title || 'a suggestion';
-        await showNotification('New vote', `${vote.user_name || 'Someone'} liked ${label}`);
+        const entryId = String(voteEntryId(vote));
+        const matchingEntry = (entries || []).find(i => String(i.id) === entryId);
+        const label = matchingEntry?.title || 'an entry';
+        await showNotification('New vote', `${vote.user_name || 'Someone'} liked ${label}`, '#suggestions');
       }
     } catch (err) {
       console.warn('Notification polling failed', err);
@@ -121,7 +128,11 @@
   async function enableNotifications() {
     if (!('Notification' in window)) return;
     if (!HAS_SUPABASE) {
-      alert('Shared notifications are ready in the app, but they need the shared Supabase backend to detect votes and new entries from other people.');
+      alert('Supabase is required for shared notifications.');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      alert('Notifications are blocked for this site. Please enable them in your browser or device settings.');
       return;
     }
     const permission = await Notification.requestPermission();
@@ -130,6 +141,7 @@
       await registerWorker();
       initialized = false;
       startPolling();
+      await showNotification('Lisbon with Friends', 'Notifications are enabled.');
     }
     updateButton();
   }
@@ -138,6 +150,8 @@
 
   if (location.hash === '#suggestions') {
     setTimeout(() => document.querySelector('[data-tab="suggestions"]')?.click(), 0);
+  } else if (location.hash === '#overview') {
+    setTimeout(() => document.querySelector('[data-tab="overview"]')?.click(), 0);
   }
 
   updateButton();

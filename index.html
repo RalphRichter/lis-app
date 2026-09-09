@@ -106,8 +106,12 @@
         <label>Day<select id="editDay" required></select></label>
         <label>Type<select id="editType"><option value="fixed">Overview</option><option value="idea">Suggestion</option></select></label>
         <label>Category<input id="editCategory" /></label>
-        <label>Time<input id="editTime" /></label>
+        <label>Time / label<input id="editTime" placeholder="Evening / Daytime / 18:30–20:00" /></label>
         <label>Price<input id="editPrice" /></label>
+        <label>Start time<input id="editStartTime" type="time" /></label>
+        <label>End time<input id="editEndTime" type="time" /></label>
+        <label>Repeat<select id="editRepeat"><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option></select></label>
+        <label>Repeat until<input id="editRepeatUntil" type="date" min="2026-09-08" max="2026-09-13" /></label>
         <label class="wide">Location<input id="editLocation" /></label>
         <label class="wide">Description<textarea id="editDescription" rows="3"></textarea></label>
         <label class="wide">URL<input id="editUrl" type="url" placeholder="https://…" /></label>

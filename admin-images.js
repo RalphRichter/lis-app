@@ -144,4 +144,11 @@
   const observer = new MutationObserver(applyAdminImages);
   observer.observe(adminList, { childList:true, subtree:true });
   applyAdminImages();
+
+  if (!document.querySelector('script[data-cloud-sync]')) {
+    const cloudScript = document.createElement('script');
+    cloudScript.src = 'cloud-sync.js?v=1';
+    cloudScript.dataset.cloudSync = '1';
+    document.body.appendChild(cloudScript);
+  }
 })();

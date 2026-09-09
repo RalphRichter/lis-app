@@ -128,17 +128,35 @@ async function toggleVote(item){
   renderAll();
 }
 
-function appleMapsUrl(location){
-  return `https://maps.apple.com/?q=${encodeURIComponent(location)}`;
+function appleMapsUrl(location){ return `https://maps.apple.com/?q=${encodeURIComponent(location)}`; }
+function dayLabel(day){ return `${day.label} · ${new Date(day.date+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',timeZone:TZ})}`; }
+function isWeekday(date){ const d=new Date(date+'T12:00:00Z').getUTCDay(); return d>=1 && d<=5; }
+function occursOn(item,date){
+  if(item.date===date) return true;
+  if(!item.repeat || item.repeat==='none' || date<item.date) return false;
+  const until=item.repeat_until || TRIP_DAYS[TRIP_DAYS.length-1].date;
+  if(date>until) return false;
+  if(item.repeat==='daily') return true;
+  if(item.repeat==='weekdays') return isWeekday(date);
+  return false;
 }
-function dayLabel(day){
-  return `${day.label} · ${new Date(day.date+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',timeZone:TZ})}`;
+function itemsForDate(date,type){
+  return state.items.filter(i => i.type===type && occursOn(i,date)).map(i => i.date===date ? i : {...i,date,_recurringOccurrence:true});
+}
+function displayTime(item){
+  if(item.start_time){ return item.end_time ? `${item.start_time}–${item.end_time}` : item.start_time; }
+  return item.time || 'Flexible';
+}
+function repeatLabel(item){
+  if(item.repeat==='daily') return '↻ Daily';
+  if(item.repeat==='weekdays') return '↻ Weekdays';
+  return '';
 }
 
 function renderDayCards(target, type){
   target.innerHTML = '';
   for(const day of TRIP_DAYS){
-    let items = state.items.filter(i => i.date===day.date && i.type===type);
+    let items = itemsForDate(day.date,type);
     if(type==='idea' && state.suggestionFilter==='liked') items.sort((a,b)=>voteCount(b.id)-voteCount(a.id));
     if(!items.length) continue;
 
@@ -152,17 +170,18 @@ function renderDayCards(target, type){
       const iNode = document.getElementById('itemTemplate').content.cloneNode(true);
       const root = iNode.querySelector('.item-card');
       root.classList.add(item.type);
+      root.dataset.itemId=item.id;
+      root.dataset.itemDate=item.date;
       iNode.querySelector('.category-chip').textContent = item.category || (item.type==='idea'?'Suggestion':'Overview');
-      iNode.querySelector('.time-chip').textContent = item.time || 'Flexible';
+      iNode.querySelector('.time-chip').textContent = displayTime(item);
       iNode.querySelector('.item-title').textContent = item.title;
       iNode.querySelector('.item-description').textContent = item.description || '';
 
       const meta = iNode.querySelector('.meta-row');
-      if(item.location){
-        meta.insertAdjacentHTML('beforeend', `<a class="map-link" href="${escapeAttr(appleMapsUrl(item.location))}" target="_blank" rel="noopener">📍 ${escapeHtml(item.location)} ↗</a>`);
-      }
+      if(item.location) meta.insertAdjacentHTML('beforeend', `<a class="map-link" href="${escapeAttr(appleMapsUrl(item.location))}" target="_blank" rel="noopener">📍 ${escapeHtml(item.location)} ↗</a>`);
       if(item.price) meta.insertAdjacentHTML('beforeend', `<span>💶 ${escapeHtml(item.price)}</span>`);
       if(item.created_by) meta.insertAdjacentHTML('beforeend', `<span>＋ ${escapeHtml(item.created_by)}</span>`);
+      if(repeatLabel(item)) meta.insertAdjacentHTML('beforeend', `<span>${escapeHtml(repeatLabel(item))}${item.repeat_until ? ` · until ${escapeHtml(item.repeat_until)}` : ''}</span>`);
       if(item.type==='idea'){
         if(item.url) meta.insertAdjacentHTML('beforeend', `<a class="url-line" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">URL: ${escapeHtml(item.url)} ↗</a>`);
         else meta.insertAdjacentHTML('beforeend', `<span class="url-line">URL: —</span>`);
@@ -186,11 +205,12 @@ function renderDayCards(target, type){
 
 function renderAdmin(){
   adminList.innerHTML = '';
-  const sorted = [...state.items].sort((a,b)=>a.date.localeCompare(b.date) || (a.time||'').localeCompare(b.time||''));
+  const sorted = [...state.items].sort((a,b)=>a.date.localeCompare(b.date) || displayTime(a).localeCompare(displayTime(b)));
   for(const item of sorted){
     const row = document.createElement('div');
     row.className = 'admin-row';
-    row.innerHTML = `<div><h3>${escapeHtml(item.title)}</h3><div class="admin-meta">${escapeHtml(item.date)} · ${escapeHtml(item.type==='idea'?'Suggestion':'Overview')} · ${escapeHtml(item.time||'Flexible')} · ${escapeHtml(item.location||'No location')}</div></div><div class="admin-actions"><button class="small-btn edit-entry">Edit</button><button class="small-btn danger delete-entry">Delete</button></div>`;
+    const repeat = repeatLabel(item) ? ` · ${repeatLabel(item)}${item.repeat_until ? ` until ${item.repeat_until}` : ''}` : '';
+    row.innerHTML = `<div><h3>${escapeHtml(item.title)}</h3><div class="admin-meta">${escapeHtml(item.date)} · ${escapeHtml(item.type==='idea'?'Suggestion':'Overview')} · ${escapeHtml(displayTime(item))}${escapeHtml(repeat)} · ${escapeHtml(item.location||'No location')}</div></div><div class="admin-actions"><button class="small-btn edit-entry">Edit</button><button class="small-btn danger delete-entry">Delete</button></div>`;
     row.querySelector('.edit-entry').addEventListener('click', ()=>openEdit(item));
     row.querySelector('.delete-entry').addEventListener('click', ()=>deleteEntry(item));
     adminList.appendChild(row);
@@ -243,9 +263,7 @@ document.getElementById('ideaForm').addEventListener('submit', async(e)=>{
   if(HAS_SUPABASE){
     try{ await supabase('ideas',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(item)}); await loadData(); }
     catch(err){e.preventDefault();alert('Could not save the idea. '+err.message);return;}
-  } else {
-    state.items.push(item); saveLocal();
-  }
+  } else { state.items.push(item); saveLocal(); }
   e.target.reset(); state.activeTab='suggestions'; renderAll();
 });
 
@@ -256,6 +274,10 @@ function openEdit(item){
   document.getElementById('editType').value=item.type||'idea';
   document.getElementById('editCategory').value=item.category||'';
   document.getElementById('editTime').value=item.time||'';
+  document.getElementById('editStartTime').value=item.start_time||'';
+  document.getElementById('editEndTime').value=item.end_time||'';
+  document.getElementById('editRepeat').value=item.repeat||'none';
+  document.getElementById('editRepeatUntil').value=item.repeat_until||'';
   document.getElementById('editPrice').value=item.price||'';
   document.getElementById('editLocation').value=item.location||'';
   document.getElementById('editDescription').value=item.description||'';
@@ -263,10 +285,19 @@ function openEdit(item){
   editDialog.showModal();
 }
 
+document.getElementById('editRepeat').addEventListener('change',e=>{
+  const until=document.getElementById('editRepeatUntil');
+  if(e.target.value==='none') until.value='';
+  else if(!until.value) until.value=TRIP_DAYS[TRIP_DAYS.length-1].date;
+});
+
 document.getElementById('editForm').addEventListener('submit', async(e)=>{
   const id=document.getElementById('editId').value;
   const current=state.items.find(i=>i.id===id);
   if(!current) return;
+  const repeat=document.getElementById('editRepeat').value;
+  const startTime=document.getElementById('editStartTime').value;
+  const endTime=document.getElementById('editEndTime').value;
   const updated={
     ...current,
     title:document.getElementById('editTitle').value.trim(),
@@ -274,6 +305,10 @@ document.getElementById('editForm').addEventListener('submit', async(e)=>{
     type:document.getElementById('editType').value,
     category:document.getElementById('editCategory').value.trim(),
     time:document.getElementById('editTime').value.trim(),
+    start_time:startTime,
+    end_time:endTime,
+    repeat,
+    repeat_until:repeat==='none' ? '' : (document.getElementById('editRepeatUntil').value || TRIP_DAYS[TRIP_DAYS.length-1].date),
     price:document.getElementById('editPrice').value.trim(),
     location:document.getElementById('editLocation').value.trim(),
     description:document.getElementById('editDescription').value.trim(),
@@ -285,6 +320,7 @@ document.getElementById('editForm').addEventListener('submit', async(e)=>{
     try{
       const payload={date:updated.date,title:updated.title,category:updated.category,time:updated.time,location:updated.location,description:updated.description,price:updated.price,url:updated.url,created_by:updated.created_by};
       await supabase(`ideas?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+      const overrides=getOverrides(); overrides[id]=updated; setOverrides(overrides);
       await loadData();
     } catch(err){e.preventDefault();alert('Could not update the entry. '+err.message);return;}
   } else {

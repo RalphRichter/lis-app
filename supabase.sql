@@ -86,11 +86,63 @@ create table if not exists public.payment_splits (
   updated_at timestamptz not null default now()
 );
 
+-- Web Push subscriptions are private server-side data. Browser clients can only
+-- register/unregister their own endpoint through the security-definer RPCs below.
+create table if not exists public.push_subscriptions (
+  endpoint text primary key,
+  p256dh text not null,
+  auth text not null,
+  user_id uuid,
+  user_name text,
+  user_agent text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.register_push_subscription(
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text,
+  p_user_id uuid default null,
+  p_user_name text default null,
+  p_user_agent text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.push_subscriptions(endpoint,p256dh,auth,user_id,user_name,user_agent,updated_at)
+  values (p_endpoint,p_p256dh,p_auth,p_user_id,p_user_name,p_user_agent,now())
+  on conflict (endpoint) do update set
+    p256dh = excluded.p256dh,
+    auth = excluded.auth,
+    user_id = excluded.user_id,
+    user_name = excluded.user_name,
+    user_agent = excluded.user_agent,
+    updated_at = now();
+end;
+$$;
+
+create or replace function public.unregister_push_subscription(p_endpoint text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.push_subscriptions where endpoint = p_endpoint;
+$$;
+
+revoke all on table public.push_subscriptions from anon, authenticated;
+grant execute on function public.register_push_subscription(text,text,text,uuid,text,text) to anon, authenticated;
+grant execute on function public.unregister_push_subscription(text) to anon, authenticated;
+
 alter table public.ideas enable row level security;
 alter table public.users enable row level security;
 alter table public.votes enable row level security;
 alter table public.entry_images enable row level security;
 alter table public.payment_splits enable row level security;
+alter table public.push_subscriptions enable row level security;
 
 grant select, insert, update, delete on public.ideas to anon, authenticated;
 grant select, insert, update on public.users to anon, authenticated;

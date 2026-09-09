@@ -91,5 +91,38 @@
     }
   };
 
+  const refreshBtn = document.getElementById('refreshEntriesBtn');
+  async function refreshFromDatabase() {
+    if (!ready) return alert('Supabase is not configured.');
+    if (!refreshBtn) return;
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+    note.textContent = 'Loading entries from Supabase…';
+    try {
+      const [rows,votes] = await Promise.all([
+        supabase('ideas?select=*&order=date.asc,created_at.asc'),
+        supabase('votes?select=*')
+      ]);
+      // For this explicit refresh the database is authoritative: only rows
+      // stored in Supabase are used, without local seed/override values.
+      state.items = (rows || []).map(item => ({...item,type:item.type || 'idea'}));
+      state.votes = votes || [];
+      localStorage.removeItem('lis-admin-overrides');
+      localStorage.removeItem('lis-admin-hidden');
+      saveLocal();
+      renderAll();
+      note.textContent = `${state.items.length} entries loaded from Supabase.`;
+      refreshBtn.textContent = 'Updated';
+      setTimeout(() => refreshBtn.textContent = 'Update from database', 1600);
+    } catch (err) {
+      note.textContent = 'Database refresh failed.';
+      alert('Could not load the entries from Supabase. ' + err.message);
+      refreshBtn.textContent = 'Update from database';
+    } finally {
+      refreshBtn.disabled = false;
+    }
+  }
+  refreshBtn?.addEventListener('click', refreshFromDatabase);
+
   if (ready) setTimeout(() => loadData().then(renderAll),100);
 })();

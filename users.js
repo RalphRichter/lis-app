@@ -4,6 +4,7 @@
 
   state.userId = localStorage.getItem('lis-user-id') || '';
   const nameKey = name => name.trim().toLocaleLowerCase('en-US');
+  const voteEntryId = vote => vote.entry_id || vote.idea_id || '';
 
   async function resolveUser(name) {
     const key = nameKey(name);
@@ -47,21 +48,49 @@
     renderAll();
   });
 
-  const originalHasVoted = hasVoted;
+  voteCount = function(id) {
+    return state.votes.filter(v => voteEntryId(v) === id).length;
+  };
+
+  voters = function(id) {
+    return state.votes.filter(v => voteEntryId(v) === id).map(v => v.user_name).filter(Boolean);
+  };
+
   hasVoted = function(id) {
-    if (state.userId && state.votes.some(v => v.idea_id===id && v.user_id===state.userId)) return true;
-    return originalHasVoted(id);
+    return state.votes.some(v => {
+      if (voteEntryId(v) !== id) return false;
+      if (state.userId && v.user_id) return v.user_id === state.userId;
+      return v.user_name === state.name;
+    });
   };
 
   toggleVote = async function(item) {
     if (!ensureName()) return;
     if (!state.userId) await syncCurrentUser();
-    const existing = state.votes.find(v => v.idea_id===item.id && ((state.userId && v.user_id===state.userId) || (!v.user_id && v.user_name===state.name)));
+    if (!state.userId) {
+      alert('Could not save the vote because the user profile could not be synchronized. Please save your name again.');
+      return;
+    }
+
+    const existing = state.votes.find(v =>
+      voteEntryId(v) === item.id &&
+      ((v.user_id && v.user_id === state.userId) || (!v.user_id && v.user_name === state.name))
+    );
+
     try {
       if (existing) {
         await supabase(`votes?id=eq.${encodeURIComponent(existing.id)}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});
       } else {
-        await supabase('votes',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({idea_id:item.id,user_name:state.name,user_id:state.userId || null})});
+        await supabase('votes',{
+          method:'POST',
+          headers:{Prefer:'return=representation'},
+          body:JSON.stringify({
+            entry_id:item.id,
+            idea_id:item.id,
+            user_id:state.userId,
+            user_name:state.name
+          })
+        });
       }
       await loadData();
       renderAll();

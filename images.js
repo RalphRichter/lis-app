@@ -1,7 +1,80 @@
 (() => {
   const KEY = 'lis-entry-images';
-  const imageMap = () => JSON.parse(localStorage.getItem(KEY) || '{}');
+  const cfg = window.LIS_APP_CONFIG || {};
+  const HAS_CLOUD = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
+  const imageMap = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) { return {}; } };
   const saveMap = (m) => localStorage.setItem(KEY, JSON.stringify(m));
+
+  function apiHeaders(extra={}) {
+    return { apikey: cfg.SUPABASE_ANON_KEY, Authorization: `Bearer ${cfg.SUPABASE_ANON_KEY}`, ...extra };
+  }
+  async function cloudTable(path, options={}) {
+    const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${path}`, { ...options, headers: apiHeaders({ 'Content-Type':'application/json', ...(options.headers || {}) }) });
+    if (!res.ok) throw new Error(await res.text());
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+  async function saveCloudImageRecord(entryId, imageUrl) {
+    if (!HAS_CLOUD) return;
+    await cloudTable('entry_images?on_conflict=entry_id', {
+      method:'POST',
+      headers:{ Prefer:'resolution=merge-duplicates,return=minimal' },
+      body:JSON.stringify({ entry_id:entryId, image_url:imageUrl, updated_at:new Date().toISOString() })
+    });
+  }
+  async function deleteCloudImageRecord(entryId) {
+    if (!HAS_CLOUD) return;
+    await cloudTable(`entry_images?entry_id=eq.${encodeURIComponent(entryId)}`, { method:'DELETE', headers:{ Prefer:'return=minimal' } });
+  }
+  async function uploadDataUrl(entryId, dataUrl) {
+    const blob = await (await fetch(dataUrl)).blob();
+    const path = `${encodeURIComponent(entryId)}.jpg`;
+    const res = await fetch(`${cfg.SUPABASE_URL}/storage/v1/object/entry-images/${path}`, {
+      method:'POST',
+      headers: apiHeaders({ 'Content-Type': blob.type || 'image/jpeg', 'x-upsert':'true' }),
+      body:blob
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return `${cfg.SUPABASE_URL}/storage/v1/object/public/entry-images/${path}?v=${Date.now()}`;
+  }
+  async function persistImage(entryId, value) {
+    const map = imageMap();
+    if (!value) {
+      delete map[entryId];
+      saveMap(map);
+      if (HAS_CLOUD) await deleteCloudImageRecord(entryId);
+      return '';
+    }
+    let sharedValue = value;
+    if (HAS_CLOUD && value.startsWith('data:image/')) sharedValue = await uploadDataUrl(entryId, value);
+    map[entryId] = sharedValue;
+    saveMap(map);
+    if (HAS_CLOUD) await saveCloudImageRecord(entryId, sharedValue);
+    return sharedValue;
+  }
+  async function syncCloudImages() {
+    if (!HAS_CLOUD) return;
+    try {
+      const rows = await cloudTable('entry_images?select=entry_id,image_url');
+      const map = imageMap();
+      const cloudIds = new Set();
+      for (const row of rows || []) {
+        cloudIds.add(row.entry_id);
+        map[row.entry_id] = row.image_url;
+      }
+      saveMap(map);
+
+      // One-time migration: photos already saved on this device are uploaded automatically.
+      for (const [entryId, value] of Object.entries(map)) {
+        if (!cloudIds.has(entryId) && typeof value === 'string' && value.startsWith('data:image/')) {
+          try { await persistImage(entryId, value); } catch (err) { console.warn('Could not migrate local image', entryId, err); }
+        }
+      }
+      if (typeof renderAll === 'function') renderAll();
+    } catch (err) {
+      console.warn('Shared images unavailable; keeping local images.', err);
+    }
+  }
 
   function fallbackImage(item) {
     const title = escapeXml(item.title || 'Lisbon');
@@ -55,7 +128,7 @@
     const picker = field?.closest('.image-picker'); if (!picker) return;
     const preview = picker.querySelector('.image-picker-preview'); const status = picker.querySelector('.image-picker-status'); const value = getImageValue(field);
     if (!value) { preview.hidden = true; preview.removeAttribute('src'); status.textContent = 'Optional · choose a photo, paste an image, or enter a URL.'; return; }
-    preview.hidden = false; preview.src = value; status.textContent = field.dataset.localImage ? 'Photo selected from this device.' : 'Image URL selected.';
+    preview.hidden = false; preview.src = value; status.textContent = field.dataset.localImage ? 'Photo selected from this device.' : 'Image selected.';
   }
   async function acceptImageFile(field, file) { try { const data = await imageFileToDataUrl(file); field.dataset.localImage = data; field.value = ''; updatePickerPreview(field); } catch (err) { alert(err.message || 'Could not read the image.'); } }
   async function pasteFromClipboard(field, pasteZone) {
@@ -89,10 +162,21 @@
 
   document.getElementById('ideaForm')?.addEventListener('submit', () => {
     const field = document.getElementById('ideaImage'); const image = getImageValue(field); const title = document.getElementById('ideaTitle')?.value.trim() || ''; const date = document.getElementById('ideaDay')?.value || ''; if (!image) return;
-    setTimeout(() => { const candidates = state.items.filter(i => i.title === title && i.date === date); const item = candidates[candidates.length - 1]; if (!item) return; const map = imageMap(); map[item.id] = image; saveMap(map); if (field) { field.value = ''; delete field.dataset.localImage; updatePickerPreview(field); } renderAll(); }, 0);
+    setTimeout(async () => {
+      const candidates = state.items.filter(i => i.title === title && i.date === date); const item = candidates[candidates.length - 1]; if (!item) return;
+      try { await persistImage(item.id, image); } catch (err) { console.warn('Could not sync image.', err); const map=imageMap(); map[item.id]=image; saveMap(map); }
+      if (field) { field.value = ''; delete field.dataset.localImage; updatePickerPreview(field); }
+      renderAll();
+    }, 50);
   }, true);
   document.getElementById('editForm')?.addEventListener('submit', () => {
     const id = document.getElementById('editId')?.value || ''; const field = document.getElementById('editImage'); const image = getImageValue(field); if (!id) return;
-    const map = imageMap(); if (image) map[id] = image; else delete map[id]; saveMap(map); setTimeout(renderAll, 0);
+    setTimeout(async () => {
+      try { await persistImage(id, image); } catch (err) { console.warn('Could not sync image.', err); const map=imageMap(); if(image)map[id]=image;else delete map[id];saveMap(map); }
+      renderAll();
+    }, 20);
   }, true);
+
+  // Pull shared images on every device and migrate older local iPhone/iPad photos automatically.
+  setTimeout(syncCloudImages, 250);
 })();

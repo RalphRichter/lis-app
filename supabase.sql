@@ -1,4 +1,6 @@
--- Run in Supabase SQL Editor once.
+-- Lisbon with Friends · shared Supabase setup
+-- Run this whole script in Supabase SQL Editor.
+
 create table if not exists public.ideas (
   id text primary key,
   date date not null,
@@ -21,11 +23,88 @@ create table if not exists public.votes (
   unique (idea_id, user_name)
 );
 
+create table if not exists public.entry_images (
+  entry_id text primary key,
+  image_url text not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.payment_splits (
+  entry_id text primary key,
+  enabled boolean not null default false,
+  amount numeric,
+  currency text default 'EUR',
+  people integer default 4,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.ideas enable row level security;
 alter table public.votes enable row level security;
+alter table public.entry_images enable row level security;
+alter table public.payment_splits enable row level security;
 
-create policy "ideas readable by everyone" on public.ideas for select using (true);
-create policy "ideas insertable by everyone" on public.ideas for insert with check (true);
-create policy "votes readable by everyone" on public.votes for select using (true);
-create policy "votes insertable by everyone" on public.votes for insert with check (true);
-create policy "votes deletable by everyone" on public.votes for delete using (true);
+grant select, insert, update, delete on public.ideas to anon, authenticated;
+grant select, insert, update, delete on public.votes to anon, authenticated;
+grant select, insert, update, delete on public.entry_images to anon, authenticated;
+grant select, insert, update, delete on public.payment_splits to anon, authenticated;
+
+-- Re-runnable policies.
+drop policy if exists "ideas readable by everyone" on public.ideas;
+drop policy if exists "ideas insertable by everyone" on public.ideas;
+drop policy if exists "ideas updateable by everyone" on public.ideas;
+drop policy if exists "ideas deletable by everyone" on public.ideas;
+drop policy if exists "votes readable by everyone" on public.votes;
+drop policy if exists "votes insertable by everyone" on public.votes;
+drop policy if exists "votes deletable by everyone" on public.votes;
+drop policy if exists "entry images readable by everyone" on public.entry_images;
+drop policy if exists "entry images insertable by everyone" on public.entry_images;
+drop policy if exists "entry images updateable by everyone" on public.entry_images;
+drop policy if exists "entry images deletable by everyone" on public.entry_images;
+drop policy if exists "payment splits readable by everyone" on public.payment_splits;
+drop policy if exists "payment splits insertable by everyone" on public.payment_splits;
+drop policy if exists "payment splits updateable by everyone" on public.payment_splits;
+drop policy if exists "payment splits deletable by everyone" on public.payment_splits;
+
+create policy "ideas readable by everyone" on public.ideas for select to anon, authenticated using (true);
+create policy "ideas insertable by everyone" on public.ideas for insert to anon, authenticated with check (true);
+create policy "ideas updateable by everyone" on public.ideas for update to anon, authenticated using (true) with check (true);
+create policy "ideas deletable by everyone" on public.ideas for delete to anon, authenticated using (true);
+
+create policy "votes readable by everyone" on public.votes for select to anon, authenticated using (true);
+create policy "votes insertable by everyone" on public.votes for insert to anon, authenticated with check (true);
+create policy "votes deletable by everyone" on public.votes for delete to anon, authenticated using (true);
+
+create policy "entry images readable by everyone" on public.entry_images for select to anon, authenticated using (true);
+create policy "entry images insertable by everyone" on public.entry_images for insert to anon, authenticated with check (true);
+create policy "entry images updateable by everyone" on public.entry_images for update to anon, authenticated using (true) with check (true);
+create policy "entry images deletable by everyone" on public.entry_images for delete to anon, authenticated using (true);
+
+create policy "payment splits readable by everyone" on public.payment_splits for select to anon, authenticated using (true);
+create policy "payment splits insertable by everyone" on public.payment_splits for insert to anon, authenticated with check (true);
+create policy "payment splits updateable by everyone" on public.payment_splits for update to anon, authenticated using (true) with check (true);
+create policy "payment splits deletable by everyone" on public.payment_splits for delete to anon, authenticated using (true);
+
+-- Public image bucket used by the web app.
+insert into storage.buckets (id, name, public)
+values ('entry-images', 'entry-images', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "entry images storage upload" on storage.objects;
+drop policy if exists "entry images storage update" on storage.objects;
+drop policy if exists "entry images storage delete" on storage.objects;
+
+create policy "entry images storage upload"
+on storage.objects for insert
+to anon, authenticated
+with check (bucket_id = 'entry-images');
+
+create policy "entry images storage update"
+on storage.objects for update
+to anon, authenticated
+using (bucket_id = 'entry-images')
+with check (bucket_id = 'entry-images');
+
+create policy "entry images storage delete"
+on storage.objects for delete
+to anon, authenticated
+using (bucket_id = 'entry-images');

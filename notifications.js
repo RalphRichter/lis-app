@@ -52,26 +52,24 @@
   }
   async function saveSubscription(subscription) {
     const json = subscription.toJSON();
-    await rest('push_subscriptions?on_conflict=endpoint', {
+    await rest('rpc/register_push_subscription', {
       method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
-        endpoint: subscription.endpoint,
-        p256dh: json.keys?.p256dh || null,
-        auth: json.keys?.auth || null,
-        user_id: currentUserId(),
-        user_name: currentName() || null,
-        user_agent: navigator.userAgent,
-        updated_at: new Date().toISOString()
+        p_endpoint: subscription.endpoint,
+        p_p256dh: json.keys?.p256dh || '',
+        p_auth: json.keys?.auth || '',
+        p_user_id: currentUserId(),
+        p_user_name: currentName() || null,
+        p_user_agent: navigator.userAgent
       })
     });
   }
   async function removeSubscription(subscription) {
     if (!subscription) return;
     try {
-      await rest(`push_subscriptions?endpoint=eq.${encodeURIComponent(subscription.endpoint)}`, {
-        method: 'DELETE',
-        headers: { Prefer: 'return=minimal' }
+      await rest('rpc/unregister_push_subscription', {
+        method: 'POST',
+        body: JSON.stringify({ p_endpoint: subscription.endpoint })
       });
     } catch (err) {
       console.warn('Could not remove push subscription from Supabase.', err);

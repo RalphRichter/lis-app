@@ -21,21 +21,15 @@
     return {
       id:item.id,
       date:item.date,
-      type:item.type || 'idea',
       title:item.title || 'Untitled',
       category:item.category || null,
       time:item.time || null,
-      start_time:item.start_time || null,
-      end_time:item.end_time || null,
-      repeat:item.repeat || 'none',
-      repeat_until:item.repeat_until || null,
       location:item.location || null,
       description:item.description || null,
       price:item.price || null,
       url:item.url || null,
       created_by:item.created_by || null,
-      created_at:item.created_at || new Date().toISOString(),
-      updated_at:new Date().toISOString()
+      created_at:item.created_at || new Date().toISOString()
     };
   }
 
@@ -54,7 +48,7 @@
       btn.textContent = '✓ Pushed';
       setTimeout(() => btn.textContent = '☁️ Push entries', 1600);
     } catch (err) {
-      note.textContent = 'Push failed · run the latest supabase.sql and try again.';
+      note.textContent = 'Push failed · check that supabase.sql has been run.';
       alert('Could not push the entries. ' + err.message);
       btn.textContent = '☁️ Push entries';
     } finally {
@@ -72,7 +66,10 @@
         supabase('votes?select=*')
       ]);
       const map = new Map(structuredClone(seedItems).map(x => [x.id,x]));
-      for (const item of rows || []) map.set(item.id,{...map.get(item.id),...item,type:item.type || map.get(item.id)?.type || 'idea'});
+      for (const item of rows || []) {
+        const existing = map.get(item.id);
+        map.set(item.id,{...existing,...item,type:existing?.type || 'idea'});
+      }
       state.items = [...map.values()];
       state.votes = votes || [];
       saveLocal();

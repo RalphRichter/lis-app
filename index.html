@@ -57,8 +57,9 @@
             <h2>Manage trip entries</h2>
             <p class="muted">Shared entries, votes and images are synchronized through Supabase.</p>
           </div>
-          <button id="pushPicturesBtn" class="primary-btn" type="button">🖼️ Push pictures</button>
-          <button id="adminAddBtn" class="primary-btn">＋ New entry</button>
+          <button id="pushEntriesBtn" class="primary-btn" type="button">Push entries</button>
+          <button id="pushPicturesBtn" class="primary-btn" type="button">Push pictures</button>
+          <button id="adminAddBtn" class="primary-btn">New entry</button>
         </div>
         <div id="adminList" class="admin-list"></div>
       </section>
@@ -150,10 +151,11 @@
 
   <script src="config.js?v=2"></script>
   <script src="app.js"></script>
+  <script src="cloud-sync.js?v=2"></script>
   <script src="calendar.js?v=2"></script>
   <script src="images.js?v=3"></script>
   <script src="admin-images.js?v=4"></script>
-  <script src="admin-image-sync.js?v=2"></script>
+  <script src="admin-image-sync.js?v=3"></script>
   <script src="split-payments.js?v=4"></script>
 </body>
 </html>

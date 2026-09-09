@@ -2,14 +2,8 @@
   const cfg = window.LIS_APP_CONFIG || {};
   const ready = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
   const adminHead = document.querySelector('.admin-head');
-  const addBtn = document.getElementById('adminAddBtn');
-  if (!adminHead || !addBtn) return;
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ghost-btn';
-  btn.textContent = '☁️ Push entries';
-  addBtn.insertAdjacentElement('beforebegin', btn);
+  const btn = document.getElementById('pushEntriesBtn');
+  if (!adminHead || !btn) return;
 
   const note = document.createElement('p');
   note.className = 'muted';
@@ -36,7 +30,7 @@
   async function pushAll() {
     if (!ready) return alert('Supabase is not configured.');
     btn.disabled = true;
-    btn.textContent = '☁️ Pushing…';
+    btn.textContent = 'Pushing…';
     note.textContent = 'Uploading entries to Supabase…';
     try {
       await supabase('ideas?on_conflict=id', {
@@ -45,12 +39,12 @@
         body:JSON.stringify(state.items.map(row))
       });
       note.textContent = `${state.items.length} entries pushed to Supabase.`;
-      btn.textContent = '✓ Pushed';
-      setTimeout(() => btn.textContent = '☁️ Push entries', 1600);
+      btn.textContent = 'Pushed';
+      setTimeout(() => btn.textContent = 'Push entries', 1600);
     } catch (err) {
       note.textContent = 'Push failed · check that supabase.sql has been run.';
       alert('Could not push the entries. ' + err.message);
-      btn.textContent = '☁️ Push entries';
+      btn.textContent = 'Push entries';
     } finally {
       btn.disabled = false;
     }

@@ -20,10 +20,12 @@
   }
   [day, startTime, endTime, repeat, repeatUntil, legacyTime].forEach(hideOriginalLabel);
 
-  const endDay = document.createElement('select');
+  const endDay = document.createElement('input');
+  endDay.type = 'date';
   endDay.id = 'editEndDay';
+  endDay.min = '2026-09-08';
+  endDay.max = '2026-09-13';
   endDay.setAttribute('aria-label', 'End date');
-  [...day.options].forEach(option => endDay.appendChild(option.cloneNode(true)));
 
   const allDay = document.createElement('input');
   allDay.type = 'checkbox';
@@ -76,14 +78,21 @@
     .apple-cal-row{min-height:62px;display:grid;grid-template-columns:30px minmax(110px,1fr) auto;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #d8d8dc}
     .apple-cal-row:last-child{border-bottom:0}.apple-date-row{grid-template-columns:minmax(110px,1fr) auto;padding-left:20px}
     .apple-cal-label{font-size:1rem;font-weight:500;color:#1c1c1e}.apple-cal-icon{font-size:1.35rem;color:#8e8e93;text-align:center}
-    .apple-cal-values{display:flex;align-items:center;justify-content:flex-end;gap:8px}.apple-cal-values select,.apple-cal-values input[type=time],.apple-repeat-value select,.apple-repeat-value input[type=date]{width:auto;min-width:0;border:0;background:#e6e6eb;color:#1c1c1e;border-radius:12px;padding:8px 11px;box-shadow:none;font-size:1rem;font-weight:500}
-    .apple-cal-values select{max-width:170px}.apple-cal-values input[type=time]{max-width:104px}.apple-repeat-value select,.apple-repeat-value input[type=date]{background:transparent;padding-right:2px;text-align:right;color:#737378}
+    .apple-cal-values{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+    .apple-cal-values input[type=date],.apple-cal-values input[type=time],.apple-repeat-value select,.apple-repeat-value input[type=date]{width:auto;min-width:0;border:0;background:#e6e6eb;color:#1c1c1e;border-radius:12px;padding:8px 11px;box-shadow:none;font-size:1rem;font-weight:500}
+    .apple-cal-values input[type=date]{max-width:154px}.apple-cal-values input[type=time]{max-width:104px}
+    .apple-repeat-value select,.apple-repeat-value input[type=date]{background:transparent;padding-right:2px;text-align:right;color:#737378}
     .apple-repeat-value{display:flex;justify-content:flex-end}.apple-repeat-row select{appearance:auto}
     .apple-switch{display:block}.apple-switch-input{position:absolute;opacity:0;pointer-events:none}.apple-switch-track{width:51px;height:31px;border-radius:999px;background:#d1d1d6;display:block;position:relative;transition:.2s}.apple-switch-knob{width:27px;height:27px;position:absolute;top:2px;left:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}.apple-switch-input:checked+.apple-switch-track{background:#34c759}.apple-switch-input:checked+.apple-switch-track .apple-switch-knob{transform:translateX(20px)}
     .apple-calendar-editor.is-all-day .apple-cal-values input[type=time]{opacity:.35;pointer-events:none}
-    @media(max-width:560px){.apple-calendar-editor{margin-left:0;margin-right:0}.apple-cal-row{padding:0 12px;grid-template-columns:26px minmax(82px,1fr) auto}.apple-date-row{grid-template-columns:76px 1fr;padding-left:16px}.apple-cal-values{gap:6px}.apple-cal-values select{max-width:142px;font-size:.9rem;padding:8px}.apple-cal-values input[type=time]{max-width:92px;font-size:.9rem;padding:8px}.apple-cal-label{font-size:.95rem}}
+    @media(max-width:560px){.apple-calendar-editor{margin-left:0;margin-right:0}.apple-cal-row{padding:0 12px;grid-template-columns:26px minmax(82px,1fr) auto}.apple-date-row{grid-template-columns:58px 1fr;padding-left:16px}.apple-cal-values{gap:6px}.apple-cal-values input[type=date]{max-width:145px;font-size:.9rem;padding:8px}.apple-cal-values input[type=time]{max-width:92px;font-size:.9rem;padding:8px}.apple-cal-label{font-size:.95rem}}
   `;
   document.head.appendChild(style);
+
+  function parseTimeLabel(value='') {
+    const matches = [...String(value).matchAll(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g)].map(m => `${m[1].padStart(2,'0')}:${m[2]}`);
+    return { start: matches[0] || '', end: matches[1] || '' };
+  }
 
   function updateRepeatUntil() {
     const row = panel.querySelector('.apple-repeat-until-row');
@@ -110,8 +119,16 @@
     window.openEdit = function(item) {
       originalOpenEdit(item);
       const meta = metaMap()[item.id] || {};
-      endDay.value = meta.end_date || item.end_date || item.date;
-      allDay.checked = Boolean(meta.all_day ?? item.all_day ?? (!item.start_time && /daytime|all day/i.test(item.time || '')));
+      day.value = item.date || day.value;
+      endDay.value = meta.end_date || item.end_date || item.date || day.value;
+
+      // Older shared rows retained the entered clock time in the Time / label field.
+      // Restore those values into the proper Start / End time controls when structured fields are absent.
+      const parsed = parseTimeLabel(item.time || '');
+      startTime.value = item.start_time || parsed.start || '';
+      endTime.value = item.end_time || parsed.end || '';
+
+      allDay.checked = Boolean(meta.all_day ?? item.all_day ?? (!startTime.value && /daytime|all day/i.test(item.time || '')));
       updateAllDay();
       updateRepeatUntil();
     };

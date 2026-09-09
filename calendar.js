@@ -108,7 +108,7 @@
   injectButtons();
 
   const editor = document.createElement('script');
-  editor.src = 'apple-editor.js';
+  editor.src = 'apple-editor.js?v=2';
   editor.defer = true;
   document.body.appendChild(editor);
 })();

@@ -50,13 +50,13 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .admin-row.has-admin-thumb{grid-template-columns:1fr auto 54px}
-    .admin-thumb{width:54px;height:54px;object-fit:cover;border-radius:11px;display:block;justify-self:end;box-shadow:inset 0 0 0 1px rgba(21,53,49,.08)}
+    .admin-row.has-admin-thumb{grid-template-columns:1fr auto 108px;min-height:108px}
+    .admin-thumb{width:108px;height:108px;object-fit:cover;border-radius:14px;display:block;justify-self:end;align-self:center;box-shadow:inset 0 0 0 1px rgba(21,53,49,.08)}
     @media(max-width:760px){
-      .admin-row.has-admin-thumb{grid-template-columns:1fr 54px;align-items:center}
+      .admin-row.has-admin-thumb{grid-template-columns:1fr 108px;align-items:center;min-height:108px}
       .admin-row.has-admin-thumb>div:first-child{grid-column:1;grid-row:1}
       .admin-row.has-admin-thumb .admin-actions{grid-column:1;grid-row:2}
-      .admin-row.has-admin-thumb .admin-thumb{grid-column:2;grid-row:1/3;align-self:center}
+      .admin-row.has-admin-thumb .admin-thumb{grid-column:2;grid-row:1/3;align-self:stretch;height:100%;min-height:108px;max-height:128px}
     }
   `;
   document.head.appendChild(style);

@@ -130,3 +130,6 @@ create policy "entry images storage delete"
 on storage.objects for delete
 to anon, authenticated
 using (bucket_id = 'entry-images');
+
+-- Make PostgREST immediately pick up the newly added columns.
+notify pgrst, 'reload schema';

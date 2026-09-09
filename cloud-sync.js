@@ -18,7 +18,7 @@
     note.style.margin = '0 0 14px';
     adminHead.insertAdjacentElement('afterend', note);
   }
-  note.textContent = ready ? 'Supabase connected · changes to entries are shared across devices.' : 'Supabase is not configured.';
+  note.textContent = ready ? 'Supabase connected · database is the source of truth.' : 'Supabase is not configured.';
 
   function row(item) {
     return {
@@ -70,24 +70,29 @@
   btn.addEventListener('click', pushAll);
 
   const originalLoadData = loadData;
+
+  async function loadFreshFromDatabase() {
+    const stamp = Date.now();
+    const [rows,votes] = await Promise.all([
+      supabase(`ideas?select=*&order=date.asc,created_at.asc&_=${stamp}`),
+      supabase(`votes?select=*&_=${stamp}`)
+    ]);
+    state.items = (rows || []).map(item => ({...item,type:item.type || 'idea'}));
+    state.votes = votes || [];
+    localStorage.removeItem('lis-admin-overrides');
+    localStorage.removeItem('lis-admin-hidden');
+    return state.items.length;
+  }
+
   loadData = async function() {
     if (!ready) return originalLoadData();
     try {
-      const [rows,votes] = await Promise.all([
-        supabase('ideas?select=*&order=date.asc,created_at.asc'),
-        supabase('votes?select=*')
-      ]);
-      const map = new Map(structuredClone(seedItems).map(x => [x.id,x]));
-      for (const item of rows || []) {
-        const existing = map.get(item.id);
-        map.set(item.id,{...existing,...item,type:item.type || existing?.type || 'idea'});
-      }
-      state.items = [...map.values()];
-      state.votes = votes || [];
-      saveLocal();
+      await loadFreshFromDatabase();
     } catch (err) {
-      console.warn('Shared entries unavailable; using local fallback.',err);
-      return originalLoadData();
+      console.warn('Could not load fresh entries from Supabase.', err);
+      state.items = [];
+      state.votes = [];
+      note.textContent = 'Could not load entries from Supabase.';
     }
   };
 
@@ -99,19 +104,9 @@
     refreshBtn.textContent = 'Refreshing…';
     note.textContent = 'Loading entries from Supabase…';
     try {
-      const [rows,votes] = await Promise.all([
-        supabase('ideas?select=*&order=date.asc,created_at.asc'),
-        supabase('votes?select=*')
-      ]);
-      // For this explicit refresh the database is authoritative: only rows
-      // stored in Supabase are used, without local seed/override values.
-      state.items = (rows || []).map(item => ({...item,type:item.type || 'idea'}));
-      state.votes = votes || [];
-      localStorage.removeItem('lis-admin-overrides');
-      localStorage.removeItem('lis-admin-hidden');
-      saveLocal();
+      const count = await loadFreshFromDatabase();
       renderAll();
-      note.textContent = `${state.items.length} entries loaded from Supabase.`;
+      note.textContent = `${count} entries loaded from Supabase.`;
       refreshBtn.textContent = 'Updated';
       setTimeout(() => refreshBtn.textContent = 'Update from database', 1600);
     } catch (err) {
@@ -124,5 +119,17 @@
   }
   refreshBtn?.addEventListener('click', refreshFromDatabase);
 
-  if (ready) setTimeout(() => loadData().then(renderAll),100);
+  async function refreshOnPageShow() {
+    if (!ready) return;
+    try {
+      const count = await loadFreshFromDatabase();
+      renderAll();
+      note.textContent = `${count} entries loaded fresh from Supabase.`;
+    } catch (err) {
+      console.warn('Fresh page load from Supabase failed.', err);
+    }
+  }
+
+  if (ready) setTimeout(refreshOnPageShow, 0);
+  window.addEventListener('pageshow', refreshOnPageShow);
 })();

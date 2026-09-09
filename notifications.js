@@ -1,38 +1,91 @@
 (() => {
   const cfg = window.LIS_APP_CONFIG || {};
-  const HAS_SUPABASE = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
+  const ready = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && cfg.VAPID_PUBLIC_KEY);
   const btn = document.getElementById('notifyBtn');
-  const POLL_MS = 15000;
-  let pollTimer = null;
-  let initialized = false;
-  let seenEntryIds = new Set();
-  let seenVoteIds = new Set();
   let swReg = null;
 
+  function isIOS() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+  function isStandalone() {
+    return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
   function currentName() {
     return (localStorage.getItem('lis-name') || '').trim();
   }
-
-  function headers() {
+  function currentUserId() {
+    return (localStorage.getItem('lis-user-id') || '').trim() || null;
+  }
+  function headers(extra = {}) {
     return {
       apikey: cfg.SUPABASE_ANON_KEY,
       Authorization: `Bearer ${cfg.SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...extra
     };
   }
-
-  async function rest(path) {
+  async function rest(path, options = {}) {
     const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${path}`, {
-      headers: headers(),
+      ...options,
+      headers: headers(options.headers || {}),
       cache: 'no-store'
     });
     if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
   }
-
-  function updateButton() {
+  function urlBase64ToUint8Array(value) {
+    const padding = '='.repeat((4 - value.length % 4) % 4);
+    const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(ch => ch.charCodeAt(0)));
+  }
+  async function registerWorker() {
+    if (!('serviceWorker' in navigator)) return null;
+    swReg = await navigator.serviceWorker.register('./sw.js?v=3', { scope: './' });
+    await navigator.serviceWorker.ready;
+    return swReg;
+  }
+  async function currentSubscription() {
+    const reg = swReg || await registerWorker();
+    return reg?.pushManager?.getSubscription() || null;
+  }
+  async function saveSubscription(subscription) {
+    const json = subscription.toJSON();
+    await rest('push_subscriptions?on_conflict=endpoint', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        endpoint: subscription.endpoint,
+        p256dh: json.keys?.p256dh || null,
+        auth: json.keys?.auth || null,
+        user_id: currentUserId(),
+        user_name: currentName() || null,
+        user_agent: navigator.userAgent,
+        updated_at: new Date().toISOString()
+      })
+    });
+  }
+  async function removeSubscription(subscription) {
+    if (!subscription) return;
+    try {
+      await rest(`push_subscriptions?endpoint=eq.${encodeURIComponent(subscription.endpoint)}`, {
+        method: 'DELETE',
+        headers: { Prefer: 'return=minimal' }
+      });
+    } catch (err) {
+      console.warn('Could not remove push subscription from Supabase.', err);
+    }
+    try { await subscription.unsubscribe(); } catch (_) {}
+  }
+  async function updateButton() {
     if (!btn) return;
-    if (!('Notification' in window)) {
+    if (isIOS() && !isStandalone()) {
+      btn.textContent = '📲 Add to Home Screen';
+      btn.disabled = false;
+      return;
+    }
+    if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) {
       btn.textContent = '🔕 Not supported';
       btn.disabled = true;
       return;
@@ -42,108 +95,59 @@
       btn.disabled = false;
       return;
     }
-    const enabled = localStorage.getItem('lis-notifications-enabled') === '1' && Notification.permission === 'granted';
-    btn.textContent = enabled ? '🔔 Notifications on' : '🔔 Notifications';
-  }
-
-  async function registerWorker() {
-    if (!('serviceWorker' in navigator)) return null;
     try {
-      swReg = await navigator.serviceWorker.register('./sw.js?v=2');
-      return swReg;
-    } catch (err) {
-      console.warn('Service worker registration failed', err);
-      return null;
+      const sub = await currentSubscription();
+      btn.textContent = sub && Notification.permission === 'granted' ? '🔔 Notifications on' : '🔔 Notifications';
+    } catch (_) {
+      btn.textContent = '🔔 Notifications';
     }
   }
-
-  async function showNotification(title, body, hash = '#overview') {
-    if (Notification.permission !== 'granted') return;
-    const options = {
-      body,
-      tag: `lis-${Date.now()}-${Math.random()}`,
-      renotify: false,
-      data: { url: `./${hash}` }
-    };
-    try {
-      const reg = swReg || await navigator.serviceWorker?.ready;
-      if (reg?.showNotification) await reg.showNotification(title, options);
-      else new Notification(title, options);
-    } catch (err) {
-      console.warn('Notification failed', err);
-    }
-  }
-
-  function voteEntryId(vote) {
-    return vote.entry_id || vote.idea_id || '';
-  }
-
-  async function pollChanges() {
-    if (!HAS_SUPABASE || Notification.permission !== 'granted') return;
-    try {
-      const [entries, votes] = await Promise.all([
-        rest('ideas?select=id,title,type,created_by,created_at,updated_at&order=created_at.desc&limit=80'),
-        rest('votes?select=*&order=created_at.desc&limit=120')
-      ]);
-
-      if (!initialized) {
-        seenEntryIds = new Set((entries || []).map(x => String(x.id)));
-        seenVoteIds = new Set((votes || []).map(x => String(x.id)));
-        initialized = true;
-        return;
-      }
-
-      const me = currentName();
-      for (const entry of [...(entries || [])].reverse()) {
-        const id = String(entry.id);
-        if (seenEntryIds.has(id)) continue;
-        seenEntryIds.add(id);
-        if ((entry.created_by || '').trim() === me) continue;
-        const who = entry.created_by ? `${entry.created_by} added an entry` : 'A new entry was added';
-        const hash = entry.type === 'idea' ? '#suggestions' : '#overview';
-        await showNotification('Lisbon with Friends', `${who}: ${entry.title}`, hash);
-      }
-
-      for (const vote of [...(votes || [])].reverse()) {
-        const id = String(vote.id);
-        if (seenVoteIds.has(id)) continue;
-        seenVoteIds.add(id);
-        if ((vote.user_name || '').trim() === me) continue;
-        const entryId = String(voteEntryId(vote));
-        const matchingEntry = (entries || []).find(i => String(i.id) === entryId);
-        const label = matchingEntry?.title || 'an entry';
-        await showNotification('New vote', `${vote.user_name || 'Someone'} liked ${label}`, '#suggestions');
-      }
-    } catch (err) {
-      console.warn('Notification polling failed', err);
-    }
-  }
-
-  function startPolling() {
-    if (!HAS_SUPABASE || pollTimer) return;
-    pollChanges();
-    pollTimer = setInterval(pollChanges, POLL_MS);
-  }
-
   async function enableNotifications() {
-    if (!('Notification' in window)) return;
-    if (!HAS_SUPABASE) {
-      alert('Supabase is required for shared notifications.');
+    if (isIOS() && !isStandalone()) {
+      alert('On iPhone, open this page in Safari, tap Share, choose “Add to Home Screen”, then launch Lisbon with Friends from the Home Screen and enable notifications there.');
       return;
     }
+    if (!ready) {
+      alert('Web Push is not fully configured yet.');
+      return;
+    }
+    if (!('Notification' in window) || !('PushManager' in window)) return;
     if (Notification.permission === 'denied') {
-      alert('Notifications are blocked for this site. Please enable them in your browser or device settings.');
+      alert('Notifications are blocked. Please enable them for Lisbon with Friends in iPhone Settings.');
+      return;
+    }
+    const existing = await currentSubscription();
+    if (existing && Notification.permission === 'granted') {
+      if (confirm('Notifications are enabled. Turn them off on this device?')) {
+        await removeSubscription(existing);
+        localStorage.removeItem('lis-notifications-enabled');
+      }
+      await updateButton();
       return;
     }
     const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      localStorage.setItem('lis-notifications-enabled', '1');
-      await registerWorker();
-      initialized = false;
-      startPolling();
-      await showNotification('Lisbon with Friends', 'Notifications are enabled.');
+    if (permission !== 'granted') {
+      await updateButton();
+      return;
     }
-    updateButton();
+    try {
+      const reg = swReg || await registerWorker();
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(cfg.VAPID_PUBLIC_KEY)
+      });
+      await saveSubscription(subscription);
+      localStorage.setItem('lis-notifications-enabled', '1');
+      await reg.showNotification('Lisbon with Friends', {
+        body: 'Push notifications are enabled on this device.',
+        tag: 'lis-push-enabled',
+        data: { url: './#overview' }
+      });
+    } catch (err) {
+      console.error('Push setup failed', err);
+      alert('Could not enable push notifications. ' + err.message);
+    }
+    await updateButton();
   }
 
   btn?.addEventListener('click', enableNotifications);
@@ -154,10 +158,14 @@
     setTimeout(() => document.querySelector('[data-tab="overview"]')?.click(), 0);
   }
 
-  updateButton();
-  registerWorker().then(() => {
-    if (localStorage.getItem('lis-notifications-enabled') === '1' && Notification.permission === 'granted') {
-      startPolling();
+  registerWorker().then(async () => {
+    const sub = await currentSubscription();
+    if (sub && Notification.permission === 'granted') {
+      try { await saveSubscription(sub); } catch (err) { console.warn('Could not refresh push subscription.', err); }
     }
+    updateButton();
+  }).catch(err => {
+    console.warn('Service worker registration failed', err);
+    updateButton();
   });
 })();

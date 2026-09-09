@@ -5,6 +5,35 @@
   const addBtn = document.getElementById('adminAddBtn');
   if (!adminHead) return;
 
+  function dedupeEntries() {
+    if (typeof state === 'undefined' || !Array.isArray(state.items)) return;
+    const merged = new Map();
+    for (const item of state.items) {
+      const existing = merged.get(item.id);
+      if (!existing) {
+        merged.set(item.id, item);
+        continue;
+      }
+      const seed = typeof seedItems !== 'undefined' ? seedItems.find(s => s.id === item.id) : null;
+      merged.set(item.id, {
+        ...(seed || existing),
+        ...existing,
+        ...item,
+        type: item.type || existing.type || seed?.type || 'idea'
+      });
+    }
+    state.items = [...merged.values()];
+  }
+
+  if (typeof renderAll === 'function') {
+    const baseRenderAll = renderAll;
+    renderAll = function() {
+      dedupeEntries();
+      return baseRenderAll();
+    };
+    setTimeout(() => renderAll(), 200);
+  }
+
   let btn = document.getElementById('pushPicturesBtn');
   if (!btn) {
     btn = document.createElement('button');

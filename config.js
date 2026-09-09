@@ -1,7 +1,6 @@
-// Supabase configuration.
-// Replace the placeholders below with values from Supabase > Project Settings > API.
-// The anon key is intended for browser use together with Row Level Security policies.
+// Supabase browser configuration.
+// The publishable key is intended for client-side use together with Row Level Security policies.
 window.LIS_APP_CONFIG = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "https://okkeliisplibpbcawsxp.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_lmRTUBDBh2tdZOATAJrWUg_I9uiE7BT"
 };

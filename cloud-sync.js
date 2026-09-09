@@ -18,23 +18,32 @@
     note.style.margin = '0 0 14px';
     adminHead.insertAdjacentElement('afterend', note);
   }
-  note.textContent = ready ? 'Supabase connected · use Push entries to share the current list.' : 'Supabase is not configured.';
+  note.textContent = ready ? 'Supabase connected · changes to entries are shared across devices.' : 'Supabase is not configured.';
 
   function row(item) {
     return {
       id:item.id,
       date:item.date,
       title:item.title || 'Untitled',
+      type:item.type || 'idea',
       category:item.category || null,
       time:item.time || null,
+      start_time:item.start_time || null,
+      end_time:item.end_time || null,
+      end_date:item.end_date || null,
+      all_day:Boolean(item.all_day),
+      repeat:item.repeat || 'none',
+      repeat_until:item.repeat_until || null,
       location:item.location || null,
       description:item.description || null,
       price:item.price || null,
       url:item.url || null,
       created_by:item.created_by || null,
-      created_at:item.created_at || new Date().toISOString()
+      created_at:item.created_at || new Date().toISOString(),
+      updated_at:new Date().toISOString()
     };
   }
+  window.lisEntryRow = row;
 
   async function pushAll() {
     if (!ready) return alert('Supabase is not configured.');
@@ -71,7 +80,7 @@
       const map = new Map(structuredClone(seedItems).map(x => [x.id,x]));
       for (const item of rows || []) {
         const existing = map.get(item.id);
-        map.set(item.id,{...existing,...item,type:existing?.type || 'idea'});
+        map.set(item.id,{...existing,...item,type:item.type || existing?.type || 'idea'});
       }
       state.items = [...map.values()];
       state.votes = votes || [];

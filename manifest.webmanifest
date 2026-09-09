@@ -1,0 +1,11 @@
+{
+  "name": "Lisbon with Friends",
+  "short_name": "Lisbon",
+  "id": "/lis-app/",
+  "start_url": "/lis-app/",
+  "scope": "/lis-app/",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#0b2d2a",
+  "description": "Shared Lisbon trip plan with friends"
+}

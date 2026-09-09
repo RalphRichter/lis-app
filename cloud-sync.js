@@ -5,11 +5,20 @@
   const btn = document.getElementById('pushEntriesBtn');
   if (!adminHead || !btn) return;
 
-  const note = document.createElement('p');
-  note.className = 'muted';
-  note.style.margin = '0 0 14px';
-  note.textContent = ready ? 'Supabase connected · use Push entries once to make the current list shared.' : 'Supabase is not configured.';
-  adminHead.insertAdjacentElement('afterend', note);
+  [...adminHead.querySelectorAll('button')].forEach(candidate => {
+    if (candidate !== btn && /push entries/i.test(candidate.textContent || '')) candidate.remove();
+  });
+
+  document.querySelectorAll('#entrySyncStatus, .entry-sync-status').forEach((node,index) => { if(index) node.remove(); });
+  let note = document.getElementById('entrySyncStatus');
+  if (!note) {
+    note = document.createElement('p');
+    note.id = 'entrySyncStatus';
+    note.className = 'muted entry-sync-status';
+    note.style.margin = '0 0 14px';
+    adminHead.insertAdjacentElement('afterend', note);
+  }
+  note.textContent = ready ? 'Supabase connected · use Push entries to share the current list.' : 'Supabase is not configured.';
 
   function row(item) {
     return {
@@ -42,7 +51,7 @@
       btn.textContent = 'Pushed';
       setTimeout(() => btn.textContent = 'Push entries', 1600);
     } catch (err) {
-      note.textContent = 'Push failed · check that supabase.sql has been run.';
+      note.textContent = 'Push failed · check the Supabase setup.';
       alert('Could not push the entries. ' + err.message);
       btn.textContent = 'Push entries';
     } finally {

@@ -71,16 +71,31 @@
 
   const originalLoadData = loadData;
 
+  async function freshGet(path) {
+    const res = await fetch(`${cfg.SUPABASE_URL}/rest/v1/${path}`, {
+      method:'GET',
+      cache:'no-store',
+      headers:{
+        apikey:cfg.SUPABASE_ANON_KEY,
+        Authorization:`Bearer ${cfg.SUPABASE_ANON_KEY}`,
+        Accept:'application/json',
+        'Cache-Control':'no-cache'
+      }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
+  }
+
   async function loadFreshFromDatabase() {
-    const stamp = Date.now();
     const [rows,votes] = await Promise.all([
-      supabase(`ideas?select=*&order=date.asc,created_at.asc&_=${stamp}`),
-      supabase(`votes?select=*&_=${stamp}`)
+      freshGet('ideas?select=*&order=date.asc,created_at.asc'),
+      freshGet('votes?select=*')
     ]);
     state.items = (rows || []).map(item => ({...item,type:item.type || 'idea'}));
     state.votes = votes || [];
     localStorage.removeItem('lis-admin-overrides');
     localStorage.removeItem('lis-admin-hidden');
+    saveLocal();
     return state.items.length;
   }
 
@@ -90,9 +105,9 @@
       await loadFreshFromDatabase();
     } catch (err) {
       console.warn('Could not load fresh entries from Supabase.', err);
-      state.items = [];
-      state.votes = [];
-      note.textContent = 'Could not load entries from Supabase.';
+      note.textContent = 'Could not refresh entries from Supabase.';
+      // Keep the currently rendered data instead of blanking the app.
+      if (!state.items.length) return originalLoadData();
     }
   };
 
@@ -127,6 +142,10 @@
       note.textContent = `${count} entries loaded fresh from Supabase.`;
     } catch (err) {
       console.warn('Fresh page load from Supabase failed.', err);
+      if (!state.items.length) {
+        await originalLoadData();
+        renderAll();
+      }
     }
   }
 

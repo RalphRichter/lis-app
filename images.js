@@ -90,21 +90,19 @@
   function escapeXml(v='') { return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])); }
 
   function applyImages(target, type) {
-    const cards = [...target.querySelectorAll('.item-card')];
-    let index = 0;
     const map = imageMap();
-    for (const day of TRIP_DAYS) {
-      let items = typeof itemsForDate === 'function' ? itemsForDate(day.date, type) : state.items.filter(i => i.date === day.date && i.type === type);
-      if (type === 'idea' && state.suggestionFilter === 'liked') items.sort((a,b) => voteCount(b.id) - voteCount(a.id));
-      for (const item of items) {
-        const card = cards[index++];
-        if (!card) continue;
-        const img = card.querySelector('.item-image');
-        if (!img) continue;
-        img.src = map[item.id] || item.image || fallbackImage(item);
-        img.alt = item.title || 'Trip entry';
-        img.onerror = () => { img.onerror = null; img.src = fallbackImage(item); };
-      }
+    // Bind by entry id, never by visual card position. The Overview timeline can move
+    // completed cards into the Past section, so positional matching becomes incorrect.
+    for (const card of target.querySelectorAll('.item-card')) {
+      const entryId = card.dataset.itemId;
+      if (!entryId) continue;
+      const item = state.items.find(i => i.id === entryId);
+      if (!item || item.type !== type) continue;
+      const img = card.querySelector('.item-image');
+      if (!img) continue;
+      img.src = map[item.id] || item.image || fallbackImage(item);
+      img.alt = item.title || 'Trip entry';
+      img.onerror = () => { img.onerror = null; img.src = fallbackImage(item); };
     }
   }
 

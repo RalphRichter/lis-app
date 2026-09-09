@@ -29,7 +29,7 @@
       const item = items[index];
       if (!item) return;
 
-      // Only show a real assigned image. Do not use the generated fallback artwork here.
+      // Only show a real assigned image. Do not use generated fallback artwork in Admin.
       const src = map[item.id] || item.image || '';
       if (!src) return;
 
@@ -50,13 +50,62 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .admin-row.has-admin-thumb{grid-template-columns:1fr auto 108px;min-height:108px}
-    .admin-thumb{width:108px;height:108px;object-fit:cover;border-radius:14px;display:block;justify-self:end;align-self:center;box-shadow:inset 0 0 0 1px rgba(21,53,49,.08)}
+    .admin-row.has-admin-thumb{
+      grid-template-columns:minmax(0,1fr) auto 190px;
+      min-height:150px;
+      overflow:hidden;
+    }
+    .admin-thumb{
+      width:190px;
+      height:100%;
+      min-height:122px;
+      object-fit:cover;
+      border-radius:15px;
+      display:block;
+      justify-self:end;
+      align-self:stretch;
+      box-shadow:inset 0 0 0 1px rgba(21,53,49,.08);
+    }
     @media(max-width:760px){
-      .admin-row.has-admin-thumb{grid-template-columns:1fr 108px;align-items:center;min-height:108px}
-      .admin-row.has-admin-thumb>div:first-child{grid-column:1;grid-row:1}
-      .admin-row.has-admin-thumb .admin-actions{grid-column:1;grid-row:2}
-      .admin-row.has-admin-thumb .admin-thumb{grid-column:2;grid-row:1/3;align-self:stretch;height:100%;min-height:108px;max-height:128px}
+      .admin-row.has-admin-thumb{
+        grid-template-columns:minmax(0,1fr) minmax(180px,42%);
+        grid-template-rows:auto auto;
+        min-height:178px;
+        align-items:stretch;
+        column-gap:16px;
+      }
+      .admin-row.has-admin-thumb>div:first-child{
+        grid-column:1;
+        grid-row:1;
+        align-self:start;
+      }
+      .admin-row.has-admin-thumb .admin-actions{
+        grid-column:1;
+        grid-row:2;
+        align-self:end;
+      }
+      .admin-row.has-admin-thumb .admin-thumb{
+        grid-column:2;
+        grid-row:1/3;
+        width:calc(100% + 10px);
+        height:calc(100% + 16px);
+        min-height:0;
+        max-height:none;
+        margin:-8px -10px -8px 0;
+        border-radius:16px;
+        align-self:stretch;
+      }
+    }
+    @media(max-width:430px){
+      .admin-row.has-admin-thumb{
+        grid-template-columns:minmax(0,1fr) 40%;
+        min-height:168px;
+        column-gap:12px;
+      }
+      .admin-row.has-admin-thumb .admin-thumb{
+        width:calc(100% + 8px);
+        margin:-8px -8px -8px 0;
+      }
     }
   `;
   document.head.appendChild(style);

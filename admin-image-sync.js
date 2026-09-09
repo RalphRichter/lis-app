@@ -39,8 +39,8 @@
     btn = document.createElement('button');
     btn.id = 'pushPicturesBtn';
     btn.type = 'button';
-    btn.className = 'ghost-btn';
-    btn.textContent = '🖼️ Push pictures';
+    btn.className = 'primary-btn';
+    btn.textContent = 'Push pictures';
     if (addBtn) addBtn.insertAdjacentElement('beforebegin', btn);
     else adminHead.appendChild(btn);
   }
@@ -95,7 +95,7 @@
     }
 
     btn.disabled = true;
-    btn.textContent = '🖼️ Uploading…';
+    btn.textContent = 'Uploading…';
     let uploaded = 0, linked = 0, failed = 0;
 
     for (const [entryId,value] of entries) {
@@ -120,9 +120,9 @@
     status.textContent = failed
       ? `${linked} pictures linked, ${uploaded} uploaded, ${failed} failed.`
       : `${linked} pictures are now shared in Supabase (${uploaded} uploaded from this device).`;
-    btn.textContent = failed ? '⚠️ Push pictures' : '✓ Pictures pushed';
+    btn.textContent = failed ? 'Push pictures' : 'Pictures pushed';
     btn.disabled = false;
-    setTimeout(() => { if (!failed) btn.textContent = '🖼️ Push pictures'; }, 1800);
+    setTimeout(() => { if (!failed) btn.textContent = 'Push pictures'; }, 1800);
     if (typeof renderAll === 'function') renderAll();
   }
 
